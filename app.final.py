@@ -217,7 +217,7 @@ with st.sidebar :
     
     st.title("🌐 Black-Scholes Model Inputs and Assumptions")
     st.write("`Created by:`")
-    linkedin_url = "www.linkedin.com/in/ethan-blondin-10432a203"
+    linkedin_url = "https://www.linkedin.com/in/ethan-blondin-10432a203"
     st.markdown(f'<a href="{linkedin_url}" target="_blank" style="text-decoration: none; color: inherit;"><img src="https://cdn-icons-png.flaticon.com/512/174/174857.png" width="25" height="25" style="vertical-align: middle; margin-right: 10px;">`Ethan BLONDIN`</a>', unsafe_allow_html=True)
     # Dropdown menu
     
