@@ -1,37 +1,35 @@
-import streamlit as st
-import plotly.express as px
-import numpy as np
-import plotly.graph_objects as go
-import math
-from scipy.stats import norm
-import yfinance as yf
-import seaborn as sns
-import matplotlib.pyplot as plt
+# Importing necessary libraries
+import streamlit as st  # Web app framework
+import plotly.express as px  # For interactive plots (not used yet in this snippet)
+import numpy as np  # Numerical computations
+import plotly.graph_objects as go  # For more customized interactive plots
+import math  # Math utilities
+from scipy.stats import norm  # For normal distribution functions used in BSM
+import yfinance as yf  # Yahoo Finance API to fetch historical stock data
+import seaborn as sns  # For heatmaps
+import matplotlib.pyplot as plt  # For plotting with matplotlib
 
+# Streamlit app configuration
 st.set_page_config(page_title="Options Visualizer", layout="wide")
 st.title("📈 Real-Time Option Pricing & Greeks Dashboard")
 
 
+# ------------------------------
+# Functions for computing Greeks
+# ------------------------------
 
-
-
-
-
-# Greeks for european call options
-
+# Black-Scholes-Merton Delta (Δ)
 def BSMd(S, K, T, r, vol, call = True ):
     d1 = (np.log(S / K) + (r + 0.5 * vol**2) * T) / (vol * np.sqrt(T))
     d2 = d1 - vol * np.sqrt(T)
 
+    # Call delta: N(d1), Put delta: N(d1)-1 = -N(-d1)
     delta_c = norm.cdf(d1)
     delta_p = -norm.cdf(-d1)
 
-    if call == True :
-        return delta_c
-    else:
-        return delta_p
+    return delta_c if call else delta_p
 
-
+# Gamma (Γ): Second derivative w.r.t. underlying price
 def BSMg(S, K, T, r, vol, call = True):
     d1 = (np.log(S / K) + (r + 0.5 * vol**2) * T) / (vol * np.sqrt(T))
     d2 = d1 - vol * np.sqrt(T)
@@ -39,24 +37,19 @@ def BSMg(S, K, T, r, vol, call = True):
     gamma_c = norm.pdf(d1) / (S * vol * np.sqrt(T))
     gamma_p = norm.pdf(d1) / (S * vol * math.sqrt(T))
     
-    if call == True :
-        return gamma_c
-    else:
-        return gamma_p
+    return gamma_c if call else gamma_p
 
+# Vega (ν): Sensitivity to volatility (per 1% change)
 def BSMv(S, K, T, r, vol, call = True):
     d1 = (np.log(S / K) + (r + 0.5 * vol**2) * T) / (vol * np.sqrt(T))
     d2 = d1 - vol * np.sqrt(T)
 
-    vega_c = S * norm.pdf(d1) * np.sqrt(T) / 100  # per 1% change
-    vega_p = S * norm.pdf(d1) * math.sqrt(T) / 100  # per 1% change
+    vega_c = S * norm.pdf(d1) * np.sqrt(T) / 100
+    vega_p = S * norm.pdf(d1) * math.sqrt(T) / 100
     
-    if call == True :
-        return vega_c
-    else:
-        return vega_p
+    return vega_c if call else vega_p
 
-
+# Theta (Θ): Sensitivity to time decay (per day)
 def BSMt(S, K, T, r, vol, call = True):
     d1 = (np.log(S / K) + (r + 0.5 * vol**2) * T) / (vol * np.sqrt(T))
     d2 = d1 - vol * np.sqrt(T)
@@ -64,11 +57,9 @@ def BSMt(S, K, T, r, vol, call = True):
     theta_c = (-S * norm.pdf(d1) * vol / (2 * np.sqrt(T)) - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
     theta_p = (-S * norm.pdf(d1) * vol / (2 * math.sqrt(T)) + r * K * math.exp(-r * T) * norm.cdf(-d2)) / 365
 
-    if call == True :
-        return theta_c
-    else:
-        return theta_p
+    return theta_c if call else theta_p
 
+# Rho (ρ): Sensitivity to interest rates (per 1% change)
 def BSMr(S, K, T, r, vol, call = True):
     d1 = (np.log(S / K) + (r + 0.5 * vol**2) * T) / (vol * np.sqrt(T))
     d2 = d1 - vol * np.sqrt(T)
@@ -76,95 +67,75 @@ def BSMr(S, K, T, r, vol, call = True):
     rho_c = K * T * np.exp(-r * T) * norm.cdf(d2) / 100
     rho_p = -K * T * math.exp(-r * T) * norm.cdf(-d2) / 100
 
-    if call == True :
-        return rho_c
-    else:
-        return rho_p
+    return rho_c if call else rho_p
 
-
-
+# ------------------------------
+# Helper function to plot a Greek value over time
+# ------------------------------
 def plot_greek(data, greek_name, color="skyblue", dot_color="gray"):
     fig, ax = plt.subplots(figsize=(6, 4))
 
     y_vals = data[greek_name]
     x_vals = data.index
 
-    # Plot Greek
+    # Plot line and current value
     ax.plot(x_vals, y_vals, color=color, label=greek_name[:-5])
-
-    # Mark current value with bullet & dotted line
     ax.scatter(x_vals[-1], y_vals.iloc[-1], color=dot_color, s=50, zorder=5)
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.7)
     ax.vlines(x_vals[-1], 0, y_vals.iloc[-1], linestyle="dotted", color=dot_color, linewidth=1)
 
-    # Axis bounds (auto-fit within Greek value range)
+    # Dynamic axis scaling
     y_margin = (y_vals.max() - y_vals.min()) * 0.1
     if y_margin > 0:
         ax.set_ylim(y_vals.min() - y_margin, y_vals.max() + y_margin)
 
-    
-    #ax.set_xlabel("Date")
-    #ax.spines["left"].set_color(dot_color)
-    #ax.set_ylabel(greek_name)
-    #ax.spines["bottom"].set_color(dot_color)
-    #ax.tick_params(colors='white', labelsize=8)
-    #ax.xaxis.label.set_color(dot_color)
-    #ax.yaxis.label.set_color(dot_color)
-    #fig.patch.set_facecolor('#1e1f26')
-    #ax.set_facecolor('#1e1f26')
-
-    # Remove top/right frame lines
+    # Clean up plot appearance
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
     return fig
 
-#___________________________________________________________________________________________________________
-
-
-# Calculation of d1 and d2 & computation of the BSM formula for pricing call/put options. 
-def BSM_EU (S, K, T, r, vol, call = True) :
-    
+# ------------------------------
+# Black-Scholes-Merton Price Formula for European Options
+# ------------------------------
+def BSM_EU(S, K, T, r, vol, call = True):
     d1 = (math.log(S/K) + (r + 0.5 * vol **2) * T ) / (vol * math.sqrt(T))
     d2 = d1 - vol*math.sqrt(T)
     
-    price_EUcall = S * norm.cdf(d1) - K* math.exp(-r*T)*norm.cdf(d2)  
-    price_EUput =  K* math.exp(-r*T)*norm.cdf(-d2) - S * norm.cdf(-d1)
+    price_EUcall = S * norm.cdf(d1) - K * math.exp(-r*T) * norm.cdf(d2)
+    price_EUput = K * math.exp(-r*T) * norm.cdf(-d2) - S * norm.cdf(-d1)
     
-    if call == True:
-        return price_EUcall
-    else:
-        return price_EUput
+    return price_EUcall if call else price_EUput
 
-
-# Computing the heatmap for European call options.
-
+# ------------------------------
+# Heatmap computation for call prices
+# ------------------------------
 def compute_heatmap_call(S_vals, vol_vals, K, T, r):
     prices = np.zeros((len(vol_vals), len(S_vals)))
     for i, sigma in enumerate(vol_vals):
         for j, S in enumerate(S_vals):
-            prices[i, j] = BSM_EU (S, K, T, r, sigma, True)
+            prices[i, j] = BSM_EU(S, K, T, r, sigma, True)
     return prices
 
-
-# Computing the heatmap for European put options.
-
+# ------------------------------
+# Heatmap computation for put prices
+# ------------------------------
 def compute_heatmap_put(S_vals, vol_vals, K, T, r):
     prices = np.zeros((len(vol_vals), len(S_vals)))
     for i, sigma in enumerate(vol_vals):
         for j, S in enumerate(S_vals):
-            prices[i, j] = BSM_EU (S, K, T, r, sigma, False)
+            prices[i, j] = BSM_EU(S, K, T, r, sigma, False)
     return prices
 
-
-# Pricing of an american put option using a brownian motion based on the BMS model.
-
+# ------------------------------
+# American put pricing using Monte Carlo simulation with early exercise
+# ------------------------------
 def bsm_american_put(S0, K, T, r, vol, steps=50, paths=10000):
     dt = T / steps
     discount = np.exp(-r * dt)
-    np.random.seed(0)
+    np.random.seed(0)  # For reproducibility
 
-    # Simulate asset price paths using GBM
+    # Generate asset price paths using Geometric Brownian Motion
     Z = np.random.randn(paths, steps)
     S = np.zeros((paths, steps + 1))
     S[:, 0] = S0
@@ -172,13 +143,11 @@ def bsm_american_put(S0, K, T, r, vol, steps=50, paths=10000):
     for t in range(1, steps + 1):
         S[:, t] = S[:, t - 1] * np.exp((r - 0.5 * vol ** 2) * dt + vol * np.sqrt(dt) * Z[:, t - 1])
 
-    # Calculate payoff at all steps (American put)
-    payoff = np.maximum(K - S, 0)
+    payoff = np.maximum(K - S, 0)  # American put payoff
 
-    # Start with terminal cashflow
-    cashflow = payoff[:, -1]
+    cashflow = payoff[:, -1]  # Terminal payoff
 
-    # Backward induction for early exercise decision
+    # Backward induction to determine early exercise
     for t in range(steps - 1, 0, -1):
         in_the_money = payoff[:, t] > 0
         X = S[in_the_money, t]
@@ -187,30 +156,28 @@ def bsm_american_put(S0, K, T, r, vol, steps=50, paths=10000):
         if len(X) == 0:
             continue
 
-        # Polynomial regression (2nd degree)
+        # Fit a 2nd degree polynomial to estimate continuation value
         A = np.vstack([np.ones_like(X), X, X**2]).T
         coeffs = np.linalg.lstsq(A, Y, rcond=None)[0]
         continuation = coeffs[0] + coeffs[1] * X + coeffs[2] * X**2
 
-        # Exercise decision
         exercise = payoff[in_the_money, t] > continuation
-        cashflow[in_the_money] = np.where(exercise, payoff[in_the_money, t],
-                                          cashflow[in_the_money] * discount)
+        cashflow[in_the_money] = np.where(exercise, payoff[in_the_money, t], cashflow[in_the_money] * discount)
 
-    # Final discounted expected value
+    # Discount final expected value
     price = np.mean(cashflow) * np.exp(-r * dt)
     return price
 
 
-#___________________________________________________________________________________________________________
-
-
+# ------------------------------
+# Fetch 1-year historical stock data using yfinance
+# ------------------------------
 def get_price_data(ticker):
     data = yf.download(ticker, period="1y", interval="1d", auto_adjust=True)
-    return data
 
-#___________________________________________________________________________________________________________
-
+# ------------------------------
+# streamlit webapp
+# ------------------------------
 
 
 with st.sidebar :
@@ -253,16 +220,11 @@ with st.sidebar :
     lc_dummy = get_float(last_close)
     
 
-    K = st.number_input("Strike Price", value = lc_dummy, min_value = 0.00, key ="strike_price") # mettre initial value à close et permettre un changement arbitraire ainsi qu'un bouton réinitialiser.
-    
+    K = st.number_input("Strike Price", value = lc_dummy, min_value = 0.00, key ="strike_price")    
     T = st.number_input("Time to Maturity (in years)", value=0.5, step=0.25) 
     r = st.number_input("Risk-free rate", value=0.03)
 
-   # style = st.selectbox("Option Style", ["European", "American"])
-
-
-
-
+  
 ## Visualizing the heatmaps
 
 S_vals = np.linspace(last_close * 0.8 , last_close * 1.2, 9)
@@ -287,10 +249,6 @@ with col1:
     fig_call
 
 
-   
-
-
-    
 
 with col2:
 
@@ -306,6 +264,8 @@ with col2:
     
     fig_put
 
+
+# Plotting the option greeks
 
 col3, col4, col5, col6, col7 = st.columns(5)
 
